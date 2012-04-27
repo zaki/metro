@@ -1,5 +1,8 @@
 HEIGHT= 723
 WIDTH = 1024
+TRAIN_SIZE = 4
+MAX_HISTORY = (WIDTH - 30) / 3
+MAX_FPS_HISTORY = 20
 
 #{{{ - Utilities
 requestAnimFrame =
@@ -53,7 +56,7 @@ class Line
       for time in @times
         [start, station] = firstTime(time)
         if current_mins == start
-          trains.push new Train(station, @color, time, @points)
+          trains.push new Train(station, @color, time, @points.slice(0, station+time.length+1))
 
     @trains = trains
 
@@ -63,10 +66,10 @@ class Line
 
 class Train
   constructor: (@station, @color, @times, @points) ->
-    @w = 3
-    @h = 3
-    @x = 0
-    @y = 0
+    @w = TRAIN_SIZE
+    @h = TRAIN_SIZE
+    @x = -10
+    @y = -10
     @station = 0
 
   lerp: (p1, p2, total, current) ->
@@ -82,14 +85,19 @@ class Train
     p1 = @points[@station]
     p2 = @points[next_station]
 
-    totl = if (@station == @times.length - 1) then 200 else next_time-@times[@station]
+    totl = if (@station >= @times.length - 1) then 200 else next_time-@times[@station]
     curr = date - @times[@station]
+
+    if totl < -80000
+      totl += 86400
+    if curr < -80000
+      curr += 86400
 
     [@x, @y] = this.lerp p1, p2, totl, curr
 
     if curr >= totl
       @station += 1
-      if @station == @points.length - 1
+      if @station > @times.length - 1
         return false
 
     return true
@@ -107,11 +115,15 @@ class Game
     @bg.src = "metro.gif"
     @dt = 0
     @start_time = new Date(2012, 1, 1, 4, 45, 0)
-    @last_update = new Date().getTime()
+    @last_update = @lastFrameReset.getTime()
+    @ratio = 10
+    @train_counts = []
+    @train_count_idx = 0
+    @fps_history = []
+    @fps_history_idx = 0
 
     @lines = []
     for line in lines
-      console.log line.timetable[2]
       @lines.push new Line(line.name, line.color, line.stations, line.timetable)
 
   train_count: () ->
@@ -136,7 +148,10 @@ class Game
 
     elapsed = date - @last_update
     if elapsed > 10
-      @start_time.setSeconds(@start_time.getSeconds()+elapsed/2)
+      ratio = parseFloat(document.getElementById("ratio").value)
+      if !isNaN(ratio)
+        @ratio = ratio
+      @start_time.setSeconds(@start_time.getSeconds()+elapsed*@ratio)
       @last_update = date
 
   updateFPS: (date) ->
@@ -147,6 +162,22 @@ class Game
       @fps = @frameCount / @dt * 1000
       @frameCount = 0
       @lastFrameReset = date
+
+      if @train_counts.length < MAX_HISTORY
+        @train_counts.push game.train_count()
+      else
+        @train_counts[@train_count_idx] = game.train_count()
+        @train_count_idx++
+        if @train_count_idx > @train_counts.length - 1
+          @train_count_idx = 0
+
+      if @fps_history.length < MAX_FPS_HISTORY
+        @fps_history.push @fps
+      else
+        @fps_history[@fps_history_idx] = @fps
+        @fps_history_idx++
+        if @fps_history_idx > MAX_FPS_HISTORY
+          @fps_history_idx= 0
 
   draw: () =>
     date = new Date()
@@ -168,6 +199,20 @@ class Game
 
     for line in @lines
       line.draw(@ctx)
+
+    i = 0
+    for train_count in @train_counts
+      @ctx.fillStyle = if i == @train_count_idx-1 then '#6f6' else '#66f'
+      height = (train_count / 5)*2 + 1
+      @ctx.fillRect( 15+i*3, HEIGHT-15-height, 2, height)
+      i++
+
+    i = 0
+    for fps in @fps_history
+      @ctx.fillStyle = if i == @fps_history_idx-1 then '#f22' else '#2f2'
+      height = (fps / 60) * 30
+      @ctx.fillRect( WIDTH-15-MAX_FPS_HISTORY*3+i*3, 55-height, 2, 2)
+      i++
 
     if document.getElementById("render").checked
       requestAnimFrame this.draw

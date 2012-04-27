@@ -1,10 +1,16 @@
 (function() {
-  var Game, HEIGHT, Line, Train, WIDTH, firstTime, firstTimeFromIndex, formatNumberLength, game, requestAnimFrame,
+  var Game, HEIGHT, Line, MAX_FPS_HISTORY, MAX_HISTORY, TRAIN_SIZE, Train, WIDTH, firstTime, firstTimeFromIndex, formatNumberLength, game, requestAnimFrame,
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
   HEIGHT = 723;
 
   WIDTH = 1024;
+
+  TRAIN_SIZE = 4;
+
+  MAX_HISTORY = (WIDTH - 30) / 3;
+
+  MAX_FPS_HISTORY = 20;
 
   requestAnimFrame = window.requestAnimationFrame || window.webkitRequestAnimationFrame || window.mozRequestAnimationFrame || window.oRequestAnimationFrame || window.msRequestAnimationFrame || (function(callback, element) {
     return window.setTimeout(callback, 1000 / 60);
@@ -65,7 +71,7 @@
           time = _ref2[_j];
           _ref3 = firstTime(time), start = _ref3[0], station = _ref3[1];
           if (current_mins === start) {
-            trains.push(new Train(station, this.color, time, this.points));
+            trains.push(new Train(station, this.color, time, this.points.slice(0, station + time.length + 1)));
           }
         }
       }
@@ -94,10 +100,10 @@
       this.color = color;
       this.times = times;
       this.points = points;
-      this.w = 3;
-      this.h = 3;
-      this.x = 0;
-      this.y = 0;
+      this.w = TRAIN_SIZE;
+      this.h = TRAIN_SIZE;
+      this.x = -10;
+      this.y = -10;
       this.station = 0;
     }
 
@@ -115,12 +121,14 @@
       _ref = firstTimeFromIndex(this.times, this.station + 1), next_time = _ref[0], next_station = _ref[1];
       p1 = this.points[this.station];
       p2 = this.points[next_station];
-      totl = this.station === this.times.length - 1 ? 200 : next_time - this.times[this.station];
+      totl = this.station >= this.times.length - 1 ? 200 : next_time - this.times[this.station];
       curr = date - this.times[this.station];
+      if (totl < -80000) totl += 86400;
+      if (curr < -80000) curr += 86400;
       _ref2 = this.lerp(p1, p2, totl, curr), this.x = _ref2[0], this.y = _ref2[1];
       if (curr >= totl) {
         this.station += 1;
-        if (this.station === this.points.length - 1) return false;
+        if (this.station > this.times.length - 1) return false;
       }
       return true;
     };
@@ -148,11 +156,15 @@
       this.bg.src = "metro.gif";
       this.dt = 0;
       this.start_time = new Date(2012, 1, 1, 4, 45, 0);
-      this.last_update = new Date().getTime();
+      this.last_update = this.lastFrameReset.getTime();
+      this.ratio = 10;
+      this.train_counts = [];
+      this.train_count_idx = 0;
+      this.fps_history = [];
+      this.fps_history_idx = 0;
       this.lines = [];
       for (_i = 0, _len = lines.length; _i < _len; _i++) {
         line = lines[_i];
-        console.log(line.timetable[2]);
         this.lines.push(new Line(line.name, line.color, line.stations, line.timetable));
       }
     }
@@ -177,7 +189,7 @@
     };
 
     Game.prototype.update = function(dt) {
-      var date, elapsed, line, _i, _len, _ref;
+      var date, elapsed, line, ratio, _i, _len, _ref;
       date = dt.getTime();
       _ref = this.lines;
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
@@ -186,7 +198,9 @@
       }
       elapsed = date - this.last_update;
       if (elapsed > 10) {
-        this.start_time.setSeconds(this.start_time.getSeconds() + elapsed / 2);
+        ratio = parseFloat(document.getElementById("ratio").value);
+        if (!isNaN(ratio)) this.ratio = ratio;
+        this.start_time.setSeconds(this.start_time.getSeconds() + elapsed * this.ratio);
         return this.last_update = date;
       }
     };
@@ -197,12 +211,30 @@
         this.dt = date.getTime() - this.lastFrameReset.getTime();
         this.fps = this.frameCount / this.dt * 1000;
         this.frameCount = 0;
-        return this.lastFrameReset = date;
+        this.lastFrameReset = date;
+        if (this.train_counts.length < MAX_HISTORY) {
+          this.train_counts.push(game.train_count());
+        } else {
+          this.train_counts[this.train_count_idx] = game.train_count();
+          this.train_count_idx++;
+          if (this.train_count_idx > this.train_counts.length - 1) {
+            this.train_count_idx = 0;
+          }
+        }
+        if (this.fps_history.length < MAX_FPS_HISTORY) {
+          return this.fps_history.push(this.fps);
+        } else {
+          this.fps_history[this.fps_history_idx] = this.fps;
+          this.fps_history_idx++;
+          if (this.fps_history_idx > MAX_FPS_HISTORY) {
+            return this.fps_history_idx = 0;
+          }
+        }
       }
     };
 
     Game.prototype.draw = function() {
-      var date, line, _i, _len, _ref;
+      var date, fps, height, i, line, train_count, _i, _j, _k, _len, _len2, _len3, _ref, _ref2, _ref3;
       date = new Date();
       this.updateFPS(date);
       this.update(date);
@@ -221,6 +253,24 @@
       for (_i = 0, _len = _ref.length; _i < _len; _i++) {
         line = _ref[_i];
         line.draw(this.ctx);
+      }
+      i = 0;
+      _ref2 = this.train_counts;
+      for (_j = 0, _len2 = _ref2.length; _j < _len2; _j++) {
+        train_count = _ref2[_j];
+        this.ctx.fillStyle = i === this.train_count_idx - 1 ? '#6f6' : '#66f';
+        height = (train_count / 5) * 2 + 1;
+        this.ctx.fillRect(15 + i * 3, HEIGHT - 15 - height, 2, height);
+        i++;
+      }
+      i = 0;
+      _ref3 = this.fps_history;
+      for (_k = 0, _len3 = _ref3.length; _k < _len3; _k++) {
+        fps = _ref3[_k];
+        this.ctx.fillStyle = i === this.fps_history_idx - 1 ? '#f22' : '#2f2';
+        height = (fps / 60) * 30;
+        this.ctx.fillRect(WIDTH - 15 - MAX_FPS_HISTORY * 3 + i * 3, 55 - height, 2, 2);
+        i++;
       }
       if (document.getElementById("render").checked) {
         return requestAnimFrame(this.draw);
