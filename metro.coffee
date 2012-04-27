@@ -19,6 +19,13 @@ firstTime = (arr) ->
 
   [arr[i], i]
 
+firstTimeFromIndex = (arr, idx) ->
+  i = idx
+  while arr[i] < 0 && i < arr.length - 1
+    i += 1
+
+  [arr[i], i]
+
 formatNumberLength = (num, length) ->
     r = "" + num
     while r.length < length
@@ -71,10 +78,11 @@ class Train
 
   update: (points) ->
     date = game.current_time()
+    [next_time, next_station] = firstTimeFromIndex(@times, @station+1)
     p1 = @points[@station]
-    p2 = @points[@station+1]
+    p2 = @points[next_station]
 
-    totl = if @station == @times.length - 1 then 200 else @times[@station+1]-@times[@station]
+    totl = if (@station == @times.length - 1) then 200 else next_time-@times[@station]
     curr = date - @times[@station]
 
     [@x, @y] = this.lerp p1, p2, totl, curr
@@ -128,7 +136,7 @@ class Game
 
     elapsed = date - @last_update
     if elapsed > 10
-      @start_time.setSeconds(@start_time.getSeconds()+elapsed/5)
+      @start_time.setSeconds(@start_time.getSeconds()+elapsed/2)
       @last_update = date
 
   updateFPS: (date) ->

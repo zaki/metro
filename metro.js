@@ -1,5 +1,5 @@
 (function() {
-  var Game, HEIGHT, Line, Train, WIDTH, firstTime, formatNumberLength, game, requestAnimFrame,
+  var Game, HEIGHT, Line, Train, WIDTH, firstTime, firstTimeFromIndex, formatNumberLength, game, requestAnimFrame,
     __bind = function(fn, me){ return function(){ return fn.apply(me, arguments); }; };
 
   HEIGHT = 723;
@@ -13,6 +13,15 @@
   firstTime = function(arr) {
     var i;
     i = 0;
+    while (arr[i] < 0 && i < arr.length - 1) {
+      i += 1;
+    }
+    return [arr[i], i];
+  };
+
+  firstTimeFromIndex = function(arr, idx) {
+    var i;
+    i = idx;
     while (arr[i] < 0 && i < arr.length - 1) {
       i += 1;
     }
@@ -101,13 +110,14 @@
     };
 
     Train.prototype.update = function(points) {
-      var curr, date, p1, p2, totl, _ref;
+      var curr, date, next_station, next_time, p1, p2, totl, _ref, _ref2;
       date = game.current_time();
+      _ref = firstTimeFromIndex(this.times, this.station + 1), next_time = _ref[0], next_station = _ref[1];
       p1 = this.points[this.station];
-      p2 = this.points[this.station + 1];
-      totl = this.station === this.times.length - 1 ? 200 : this.times[this.station + 1] - this.times[this.station];
+      p2 = this.points[next_station];
+      totl = this.station === this.times.length - 1 ? 200 : next_time - this.times[this.station];
       curr = date - this.times[this.station];
-      _ref = this.lerp(p1, p2, totl, curr), this.x = _ref[0], this.y = _ref[1];
+      _ref2 = this.lerp(p1, p2, totl, curr), this.x = _ref2[0], this.y = _ref2[1];
       if (curr >= totl) {
         this.station += 1;
         if (this.station === this.points.length - 1) return false;
@@ -176,7 +186,7 @@
       }
       elapsed = date - this.last_update;
       if (elapsed > 10) {
-        this.start_time.setSeconds(this.start_time.getSeconds() + elapsed / 5);
+        this.start_time.setSeconds(this.start_time.getSeconds() + elapsed / 2);
         return this.last_update = date;
       }
     };
